@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RPG Игра</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f9;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 800px;
+      margin: 20px auto;
+      padding: 20px;
+      background: #fff;
+      border-radius: 5px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .player {
+      margin-bottom: 15px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    .player.dead {
+      background-color: #ffe6e6;
+    }
+    .log {
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      padding: 10px;
+      border-radius: 5px;
+      background: #f9f9f9;
+    }
+    #winner {
+      font-size: 1.2em;
+      color: green;
+      margin-top: 20px;
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>RPG Игра</h1>
+    <div id="players"></div>
+    <button id="play-turn">Следующий ход</button>
+    <div id="winner" class="hidden"></div>
+    <div class="log" id="log"></div>
+  </div>
+  <script>
+    class Weapon {
+      constructor(name, attack, durability, range) {
+        this.name = name;
+        this.attack = attack;
+        this.durability = durability;
+        this.range = range;
+      }
+
+      takeDamage(damage) {
+        this.durability -= damage;
+        if (this.durability < 0) this.durability = 0;
+      }
+
+      getDamage() {
+        return this.durability > 0 ? this.attack : 5; // Уменьшение урона при сломанном оружии
+      }
+
+      isBroken() {
+        return this.durability === 0;
+      }
+    }
+
+    class Sword extends Weapon {
+      constructor() {
+        super('Меч', 25, 500, 1);
+      }
+    }
+
+    class Bow extends Weapon {
+      constructor() {
+        super('Лук', 15, 300, 3);
+      }
+    }
+
+    class Staff extends Weapon {
+      constructor() {
+        super('Посох', 20, 400, 2);
+      }
+    }
+
+    class Daggers extends Weapon {
+      constructor() {
+        super('Кинжалы', 30, 200, 1);
+      }
+    }
+
+    class Player {
+      constructor(name, life, magic, speed, attack, agility, luck, description, weapon) {
+        this.name = name;
+        this.life = life;
+        this.magic = magic;
+        this.speed = speed;
+        this.attack = attack;
+        this.agility = agility;
+        this.luck = luck;
+        this.description = description;
+        this.weapon = weapon;
+        this.position = 0;
+      }
+
+      getDamage() {
+        const baseDamage = this.weapon ? this.weapon.getDamage() : this.attack * 0.2; // Без оружия урон снижен на 80%
+        return Math.round(baseDamage);
+      }
+
+      takeDamage(damage) {
+        this.life -= damage;
+        if (this.life < 0) this.life = 0;
+      }
+
+      isDead() {
+        return this.life === 0;
+      }
+
+      isAttackBlocked(opponent) {
+        return Math.random() < opponent.agility / 100;
+      }
+
+      dodged(opponent) {
+        return Math.random() < this.luck / 100;
+      }
+
+      takeAttack(opponent) {
+        if (this.dodged(opponent)) return 'уклонился от атаки';
+        if (this.isAttackBlocked(opponent)) return 'блокировал атаку';
+        const damage = opponent.getDamage();
+        this.takeDamage(damage);
+        return `получил урон ${damage}`;
+      }
+
+      checkWeapon() {
+        return this.weapon && !this.weapon.isBroken();
+      }
+
+      tryAttack(opponent) {
+        if (this.checkWeapon()) {
+          const result = opponent.takeAttack(this);
+          this.weapon.takeDamage(20);
+          return result;
+        } else {
+          this.weapon = null;
+          return opponent.takeAttack(this);
+        }
+      }
+
+      chooseEnemy(players) {
+        const aliveEnemies = players.filter(player => player !== this && !player.isDead());
+        return aliveEnemies[Math.floor(Math.random() * aliveEnemies.length)];
+      }
+    }
+
+    class Warrior extends Player {
+      constructor(name) {
+        super(name, 120, 30, 20, 35, 25, 10, 'Сильный воин', new Sword());
+      }
+    }
+
+    class Mage extends Player {
+      constructor(name) {
+        super(name, 80, 120, 15, 25, 20, 15, 'Мудрый маг', new Staff());
+      }
+    }
+
+    class Barbarian extends Player {
+      constructor(name) {
+        super(name, 140, 20, 25, 30, 20, 5, 'Суровый варвар', new Bow());
+      }
+    }
+
+    class Rogue extends Player {
+      constructor(name) {
+        super(name, 100, 50, 30, 40, 35, 20, 'Хитрый разбойник', new Daggers());
+      }
+    }
+
+    function turn(players, log) {
+      const sortedPlayers = [...players].sort((a, b) => b.agility - a.agility);
+      sortedPlayers.forEach(player => {
+        if (!player.isDead()) {
+          const enemy = player.chooseEnemy(players);
+          if (enemy) {
+            const action = player.tryAttack(enemy);
+            const logEntry = `Игрок ${player.name} атакует ${enemy.name} и ${action}.`;
+            log.push(logEntry);
+          }
+        }
+      });
+    }
+
+    function updateUI(players, log) {
+      const playersContainer = document.getElementById('players');
+      playersContainer.innerHTML = '';
+      players.forEach(player => {
+        const playerDiv = document.createElement('div');
+        playerDiv.className = `player ${player.isDead() ? 'dead' : ''}`;
+        playerDiv.innerHTML = `
+          <strong>${player.name}</strong>
+          <p>Описание: ${player.description}</p>
+          <p>Здоровье: ${player.life}</p>
+          <p>Магия: ${player.magic}</p>
+          <p>Ловкость: ${player.agility}</p>
+          <p>Удача: ${player.luck}</p>
+          <p>Оружие: ${player.weapon ? player.weapon.name : 'Без оружия'}</p>
+          <p>Прочность оружия: ${player.weapon ? player.weapon.durability : 'N/A'}</p>
+        `;
+        playersContainer.appendChild(playerDiv);
+      });
+
+      const logContainer = document.getElementById('log');
+      logContainer.innerHTML = '';
+      log.forEach(entry => {
+        const logEntry = document.createElement('p');
+        logEntry.textContent = entry;
+        logContainer.appendChild(logEntry);
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const players = [
+        new Warrior('Ле’Гард'),
+        new Mage('Энки'),
+        new Barbarian('Рагнвальдр'),
+        new Rogue('Кахара'),
+      ];
+
+      const log = [];
+
+      const playTurnButton = document.getElementById('play-turn');
+      const winnerContainer = document.getElementById('winner');
+
+      playTurnButton.addEventListener('click', () => {
+        const alivePlayers = players.filter(player => !player.isDead());
+        if (alivePlayers.length > 1) {
+          turn(players, log);
+          updateUI(players, log);
+        } else if (alivePlayers.length === 1) {
+          winnerContainer.textContent = `Победитель: ${alivePlayers[0].name}!`;
+          winnerContainer.classList.remove('hidden');
+          playTurnButton.disabled = true;
+        } else {
+          winnerContainer.textContent = 'Никто не выжил!';
+          winnerContainer.classList.remove('hidden');
+          playTurnButton.disabled = true;
+        }
+      });
+
+      updateUI(players, log);
+    });
+  </script>
+</body>
+</html>
